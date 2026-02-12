@@ -185,7 +185,12 @@ def generate_synthetic_rain(duration_sec: float) -> AudioSegment:
 # ---------------------------------------------------------------------------
 
 def load_or_generate_rain(duration_sec: float, rain_path: str = "rain_source.wav") -> AudioSegment:
-    """Load rain_source.wav if present; otherwise synthesise a substitute."""
+    """
+    Load rain audio WAV if present; otherwise synthesise a substitute.
+
+    Default rain source: "Relaxing Sound of Rain Puddles Light Rain and Rain Drops Falling"
+    YouTube reference: https://youtube.com/shorts/Go6vFy7LK5Y
+    """
     if os.path.isfile(rain_path):
         print(f"[generator] Loading rain from {rain_path}")
         rain = AudioSegment.from_wav(rain_path)

@@ -23,7 +23,9 @@ from render import render_video
 FULL_DURATION_SEC = 8 * 60 * 60        # 8 hours
 TEST_DURATION_SEC = 60                  # 1 minute
 DEFAULT_OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "output")
-RAIN_SOURCE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "rain_source.wav")
+# Rain audio source: "Relaxing Sound of Rain Puddles Light Rain and Rain Drops Falling"
+# YouTube reference: https://youtube.com/shorts/Go6vFy7LK5Y
+RAIN_SOURCE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "rain_puddles.wav")
 
 
 def run(duration_sec: float, output_dir: str, rain_path: str) -> str:
@@ -88,7 +90,7 @@ def main():
         "--rain",
         type=str,
         default=RAIN_SOURCE,
-        help="Path to rain_source.wav (synthetic substitute used if missing)",
+        help="Path to rain audio WAV file (synthetic substitute used if missing)",
     )
     args = parser.parse_args()
 
