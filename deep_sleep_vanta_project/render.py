@@ -3,12 +3,13 @@ render.py — FFmpeg Video Rendering Pipeline for Deep Sleep Vanta Project
 
 Creates a True Black (#000000) 4K video with the layered audio track.
   - Resolution: 3840x2160
-  - Codec: H.264 (libx264) with very low video bitrate (static frame)
+  - Codec: H.264 (libx264), CRF 18, tune stillimage
+  - Full Range (PC Range) colour to guarantee absolute 0 on OLED panels
+  - BT.709 colourspace / primaries / transfer characteristics
   - Audio: AAC 320 kbps
-  - Efficient: uses a single black frame looped to the target duration
+  - Uses lavfi color source at 24 fps — no intermediate PNG needed
 """
 
-import os
 import subprocess
 import shutil
 
@@ -23,65 +24,41 @@ def _find_ffmpeg() -> str:
     return path
 
 
-def generate_black_frame(output_path: str, width: int = 3840, height: int = 2160) -> str:
-    """Use FFmpeg to create a single black PNG frame at the target resolution."""
-    ffmpeg = _find_ffmpeg()
-    cmd = [
-        ffmpeg, "-y",
-        "-f", "lavfi",
-        "-i", f"color=c=black:s={width}x{height}:d=1:r=1",
-        "-frames:v", "1",
-        output_path,
-    ]
-    print(f"[render] Generating black frame → {output_path}")
-    subprocess.run(cmd, check=True, capture_output=True)
-    return output_path
-
-
 def render_video(
     audio_path: str,
     output_path: str,
     duration_sec: float,
     width: int = 3840,
     height: int = 2160,
-    video_bitrate: str = "2M",
     audio_bitrate: str = "320k",
-    codec: str = "libx264",
 ) -> str:
     """
-    Stitch a looped black frame with the audio track into the final video.
+    Generate a True Black 4K video with the audio track.
 
-    Uses FFmpeg's loop + shortest strategy:
-      - loop a single black frame for the duration of the audio
-      - mux the pre-rendered audio
-      - encode with H.264/HEVC at low video bitrate
+    Uses FFmpeg lavfi color source at 24 fps directly (no intermediate frame).
+    Full Range (PC Range) + BT.709 metadata ensures absolute 0 on OLED panels.
+    CRF 18 avoids any compression artefacts in the black.
     """
     ffmpeg = _find_ffmpeg()
 
-    # Build the frame path next to audio
-    frame_dir = os.path.dirname(audio_path) or "."
-    frame_path = os.path.join(frame_dir, "black_frame.png")
-    generate_black_frame(frame_path, width, height)
-
-    fps = 1  # 1 fps is enough for a static image — minimal file size
-
     cmd = [
         ffmpeg, "-y",
-        # Video input: loop the single black frame
-        "-loop", "1",
-        "-framerate", str(fps),
-        "-i", frame_path,
+        # Video input: lavfi black colour source at 24 fps
+        "-f", "lavfi",
+        "-i", f"color=c=black:s={width}x{height}:r=24",
         # Audio input
         "-i", audio_path,
-        # Map both streams
-        "-map", "0:v:0",
-        "-map", "1:a:0",
+        # Video filter: force full range and pixel format
+        "-vf", "scale=in_range=full:out_range=full,format=yuv420p",
         # Video encoding
-        "-c:v", codec,
-        "-preset", "ultrafast",
+        "-c:v", "libx264",
         "-tune", "stillimage",
-        "-b:v", video_bitrate,
-        "-pix_fmt", "yuv420p",
+        "-crf", "18",
+        # Full Range (PC Range) + BT.709 colour metadata
+        "-color_range", "pc",
+        "-colorspace", "bt709",
+        "-color_primaries", "bt709",
+        "-color_trc", "bt709",
         # Audio encoding
         "-c:a", "aac",
         "-b:a", audio_bitrate,
@@ -94,7 +71,7 @@ def render_video(
     ]
 
     print(f"[render] Encoding video ({duration_sec:.0f}s) → {output_path}")
-    print(f"[render] Codec={codec}  Video={video_bitrate}  Audio={audio_bitrate}")
+    print(f"[render] CRF=18  Full Range (PC)  BT.709  Audio={audio_bitrate}")
     result = subprocess.run(cmd, capture_output=True, text=True)
 
     if result.returncode != 0:
