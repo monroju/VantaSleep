@@ -2,5 +2,6 @@ output/
 __pycache__/
 *.pyc
 *.wav
+!assets/rain_synthetic_fallback.wav
 *.mp4
 *.png

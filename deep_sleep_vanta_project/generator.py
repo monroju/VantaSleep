@@ -186,26 +186,41 @@ def generate_synthetic_rain(duration_sec: float) -> AudioSegment:
 
 def load_or_generate_rain(duration_sec: float, rain_path: str = "rain_source.wav") -> AudioSegment:
     """
-    Load rain audio WAV if present; otherwise synthesise a substitute.
+    Load rain audio WAV and combine it into the mix.
+
+    Priority:
+      1. rain_puddles.wav (user-supplied from YouTube source)
+      2. rain_synthetic_fallback.wav (pre-generated in assets/)
+      3. Runtime-generated synthetic rain
 
     Default rain source: "Relaxing Sound of Rain Puddles Light Rain and Rain Drops Falling"
     YouTube reference: https://youtube.com/shorts/Go6vFy7LK5Y
     """
+    fallback_path = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "assets", "rain_synthetic_fallback.wav"
+    )
+
+    # Choose rain source: prefer user file, then pre-built fallback, then synthesise
     if os.path.isfile(rain_path):
-        print(f"[generator] Loading rain from {rain_path}")
-        rain = AudioSegment.from_wav(rain_path)
-        # Ensure stereo
-        if rain.channels == 1:
-            rain = AudioSegment.from_mono_audiosegments(rain, rain)
-        # Loop / trim to target duration
-        target_ms = int(duration_sec * 1000)
-        if len(rain) < target_ms:
-            repeats = (target_ms // len(rain)) + 1
-            rain = rain * repeats
-        rain = rain[:target_ms]
+        chosen = rain_path
+        print(f"[generator] Loading rain audio from: {chosen}")
+    elif os.path.isfile(fallback_path):
+        chosen = fallback_path
+        print(f"[generator] rain_puddles.wav not found — using synthetic fallback: {chosen}")
     else:
-        print("[generator] rain_source.wav not found — generating synthetic rain")
-        rain = generate_synthetic_rain(duration_sec)
+        print("[generator] No rain WAV found — generating synthetic rain at runtime")
+        return generate_synthetic_rain(duration_sec)
+
+    rain = AudioSegment.from_wav(chosen)
+    # Ensure stereo
+    if rain.channels == 1:
+        rain = AudioSegment.from_mono_audiosegments(rain, rain)
+    # Loop / trim to target duration
+    target_ms = int(duration_sec * 1000)
+    if len(rain) < target_ms:
+        repeats = (target_ms // len(rain)) + 1
+        rain = rain * repeats
+    rain = rain[:target_ms]
     return rain
 
 
