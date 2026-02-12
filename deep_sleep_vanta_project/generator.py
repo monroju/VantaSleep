@@ -115,17 +115,69 @@ def generate_sine(freq: float, duration_sec: float) -> np.ndarray:
 # Synthetic rain
 # ---------------------------------------------------------------------------
 
+def _apply_lowpass(signal: np.ndarray, cutoff_samples: int = 8) -> np.ndarray:
+    """Simple moving-average low-pass filter."""
+    kernel = np.ones(cutoff_samples) / cutoff_samples
+    return np.convolve(signal, kernel, mode="same")
+
+
+def _generate_raindrop_transients(duration_sec: float, density: float = 12.0) -> np.ndarray:
+    """
+    Generate random raindrop-like transients.
+
+    Each drop is a short exponentially decaying burst of noise,
+    placed randomly throughout the duration.
+
+    Args:
+        density: average number of audible drops per second
+    """
+    n_samples = _seconds_to_samples(duration_sec)
+    out = np.zeros(n_samples, dtype=np.float64)
+
+    num_drops = int(duration_sec * density)
+    drop_positions = np.random.randint(0, n_samples, size=num_drops)
+
+    for pos in drop_positions:
+        # Each raindrop: 5-25 ms burst of noise with exponential decay
+        drop_len_ms = np.random.uniform(5, 25)
+        drop_len = int(drop_len_ms * SAMPLE_RATE / 1000)
+        if pos + drop_len > n_samples:
+            drop_len = n_samples - pos
+
+        burst = np.random.randn(drop_len)
+        # Exponential decay envelope
+        decay_rate = np.random.uniform(8.0, 20.0)
+        t = np.linspace(0, 1, drop_len)
+        envelope = np.exp(-decay_rate * t)
+        # Random amplitude for depth variety
+        amplitude = np.random.uniform(0.05, 0.35)
+        out[pos : pos + drop_len] += burst * envelope * amplitude
+
+    return out
+
+
 def generate_synthetic_rain(duration_sec: float) -> AudioSegment:
-    """Create a rain-like texture from filtered pink noise (mono → stereo)."""
-    pink = generate_pink_noise(duration_sec)
-    # Gentle low-pass effect by averaging neighbours
-    kernel_size = 5
-    kernel = np.ones(kernel_size) / kernel_size
-    rain = np.convolve(pink, kernel, mode="same")
-    seg = _mono_array_to_segment(rain)
-    # Make stereo
-    seg = AudioSegment.from_mono_audiosegments(seg, seg)
-    return seg
+    """
+    Create a realistic light rain texture with:
+      1. Filtered pink noise background hiss (the "sheet" of rain)
+      2. Randomized raindrop transients for detail
+      3. Independent L/R channels for natural stereo width
+    """
+    # --- Background hiss (slightly different per channel) ---
+    pink_left = generate_pink_noise(duration_sec)
+    pink_right = generate_pink_noise(duration_sec)
+    hiss_left = _apply_lowpass(pink_left, cutoff_samples=10) * 0.6
+    hiss_right = _apply_lowpass(pink_right, cutoff_samples=10) * 0.6
+
+    # --- Raindrop transients (independent per channel for stereo spread) ---
+    drops_left = _generate_raindrop_transients(duration_sec, density=10.0)
+    drops_right = _generate_raindrop_transients(duration_sec, density=10.0)
+
+    # --- Combine layers ---
+    left = hiss_left + drops_left
+    right = hiss_right + drops_right
+
+    return _stereo_arrays_to_segment(left, right)
 
 
 # ---------------------------------------------------------------------------
